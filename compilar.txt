@@ -1,0 +1,5 @@
+COMPILAR
+javac -cp "src/postgresql-42.7.9.jar" -d bin src/CRUD.java
+
+EJECUTAR  
+java -cp "bin;src/postgresql-42.7.9.jar" CRUD
