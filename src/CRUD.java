@@ -14,12 +14,11 @@ public class CRUD {
     static String tablaActual;
 
     // Colores Profesionales
-    static Color colorInicio = new Color(236, 240, 241); // Gris muy claro
-    static Color colorFin = new Color(189, 195, 199);    // Gris plata
+    static Color colorInicio = new Color(236, 240, 241); 
+    static Color colorFin = new Color(189, 195, 199);    
     static Color colorPrimario = new Color(41, 128, 185); 
     static Color colorTexto = new Color(44, 62, 80);
 
-    // Clase para el fondo profesional con degradado
     static class PanelDegradado extends JPanel {
         @Override
         protected void paintComponent(Graphics g) {
@@ -33,7 +32,7 @@ public class CRUD {
     }
 
     public static void main(String[] args) {
-        JFrame f = new JFrame("Acceso Profesional");
+        JFrame f = new JFrame("Acceso Profesional - Electrónica");
         f.setSize(380, 520);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setLocationRelativeTo(null);
@@ -47,7 +46,6 @@ public class CRUD {
         lblLogin.setForeground(colorTexto);
         lblLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
         
-        // Campos de texto elegantes (solo línea inferior)
         JTextField txtBD = crearCampoRefinado("Base de Datos", "PV");
         JTextField txtUser = crearCampoRefinado("Usuario", "postgres");
         JPasswordField txtPass = new JPasswordField();
@@ -78,9 +76,14 @@ public class CRUD {
                 String url = "jdbc:postgresql://localhost:5432/" + txtBD.getText();
                 tablaActual = txtTabla.getText();
                 conexion = DriverManager.getConnection(url, txtUser.getText(), new String(txtPass.getPassword()));
+                // IMPORTANTE: Asegurar que los cambios se guarden
+                conexion.setAutoCommit(true); 
+                
                 f.dispose();
                 mostrarCRUD();
-            } catch (Exception ex) { JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage()); }
+            } catch (Exception ex) { 
+                JOptionPane.showMessageDialog(null, "Error de Conexión: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE); 
+            }
         });
         f.setVisible(true);
     }
@@ -99,7 +102,6 @@ public class CRUD {
         };
         JTable tabla = new JTable(modelo);
         
-        // Estilo de Tabla
         tabla.setRowHeight(35);
         tabla.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         tabla.setSelectionBackground(new Color(174, 182, 191));
@@ -111,9 +113,8 @@ public class CRUD {
 
         cargarTabla(modelo, "");
 
-        // Panel Superior con botones y búsqueda
         JPanel pTop = new JPanel(new BorderLayout(20, 0));
-        pTop.setOpaque(false); // Para que se vea el degradado de fondo
+        pTop.setOpaque(false);
         pTop.setBorder(new EmptyBorder(20, 25, 20, 25));
 
         JPanel pBotones = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
@@ -123,7 +124,6 @@ public class CRUD {
         JButton bDel = botonElegante("Eliminar", new Color(231, 76, 60));
         pBotones.add(bAdd); pBotones.add(bEdit); pBotones.add(bDel);
 
-        // BUSCADOR FILTRADO POR ID Y NOMBRE
         JTextField txtBus = new JTextField(18);
         txtBus.setBorder(new MatteBorder(0, 0, 2, 0, colorPrimario));
         txtBus.setFont(new Font("Segoe UI", Font.ITALIC, 14));
@@ -131,7 +131,7 @@ public class CRUD {
         
         JPanel pBus = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         pBus.setOpaque(false);
-        JLabel lblLupa = new JLabel("🔍 Filtrar (ID/Nombre): ");
+        JLabel lblLupa = new JLabel("🔍 Filtrar: ");
         lblLupa.setForeground(colorTexto);
         pBus.add(lblLupa); pBus.add(txtBus);
 
@@ -143,7 +143,7 @@ public class CRUD {
         bEdit.addActionListener(e -> {
             int f = tabla.getSelectedRow();
             if (f != -1) formulario(modelo, modelo.getValueAt(f, 0));
-            else JOptionPane.showMessageDialog(null, "Selecciona una fila");
+            else JOptionPane.showMessageDialog(null, "Selecciona una fila de la tabla");
         });
         bDel.addActionListener(e -> eliminar(tabla, modelo));
 
@@ -160,7 +160,7 @@ public class CRUD {
         v.setVisible(true);
     }
 
-    // --- FUNCIONES DE ESTILO ---
+    // --- ESTILOS ---
     private static JLabel lblGuia(String t) {
         JLabel l = new JLabel(t);
         l.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -196,9 +196,18 @@ public class CRUD {
     // --- LÓGICA DE DATOS ---
     static void cargarTabla(DefaultTableModel modelo, String filtro) {
         try {
+            // Obtener nombres de columnas primero para hacer el filtro dinámico
+            Statement stCols = conexion.createStatement();
+            ResultSet rsCols = stCols.executeQuery("SELECT * FROM " + tablaActual + " LIMIT 1");
+            ResultSetMetaData meta = rsCols.getMetaData();
+            int n = meta.getColumnCount();
+            
             String sql = "SELECT * FROM " + tablaActual;
-            if (!filtro.isEmpty()) sql += " WHERE CAST(id AS TEXT) ILIKE ? OR nombre ILIKE ?";
-            sql += " ORDER BY id ASC";
+            if (!filtro.isEmpty()) {
+                // Filtramos por la primera columna (ID) y la segunda (que suele ser el nombre/descripcion)
+                sql += " WHERE CAST(" + meta.getColumnName(1) + " AS TEXT) ILIKE ? OR " + meta.getColumnName(2) + " ILIKE ?";
+            }
+            sql += " ORDER BY " + meta.getColumnName(1) + " ASC";
 
             PreparedStatement ps = conexion.prepareStatement(sql);
             if (!filtro.isEmpty()) {
@@ -207,11 +216,9 @@ public class CRUD {
             }
 
             ResultSet rs = ps.executeQuery();
-            ResultSetMetaData meta = rs.getMetaData();
-            int n = meta.getColumnCount();
-
             Object[] cab = new Object[n];
             for (int i = 1; i <= n; i++) cab[i-1] = meta.getColumnName(i).toUpperCase();
+            
             modelo.setColumnIdentifiers(cab);
             modelo.setRowCount(0);
 
@@ -220,13 +227,19 @@ public class CRUD {
                 for (int i = 1; i <= n; i++) fila[i-1] = rs.getObject(i);
                 modelo.addRow(fila);
             }
-        } catch (Exception e) { }
+            rs.close();
+            ps.close();
+        } catch (Exception e) {
+            System.out.println("Error cargando tabla: " + e.getMessage());
+        }
     }
 
     static void formulario(DefaultTableModel modelo, Object idEdit) {
         try {
             ResultSet rsMeta = conexion.createStatement().executeQuery("SELECT * FROM " + tablaActual + " LIMIT 1");
             ResultSetMetaData meta = rsMeta.getMetaData();
+            String nombreId = meta.getColumnName(1); // Nombre de la columna ID primaria
+
             JPanel p = new JPanel(new GridLayout(0, 1, 5, 5));
             p.setBackground(Color.WHITE);
             ArrayList<JTextField> campos = new ArrayList<>();
@@ -235,58 +248,86 @@ public class CRUD {
 
             for (int i = 1; i <= meta.getColumnCount(); i++) {
                 String col = meta.getColumnName(i);
-                if (i == 1 || col.equalsIgnoreCase("fecha_creacion")) continue; 
+                // Saltamos ID (autoincremental) y fechas automáticas
+                if (i == 1 || col.contains("fecha")) continue; 
+
                 p.add(new JLabel(col.toUpperCase()));
                 JTextField tf = new JTextField();
                 tf.setBorder(new MatteBorder(0,0,1,0, Color.GRAY));
+                
                 if (idEdit != null) {
-                    ResultSet rsVal = conexion.createStatement().executeQuery("SELECT "+col+" FROM "+tablaActual+" WHERE id="+idEdit);
+                    PreparedStatement psVal = conexion.prepareStatement("SELECT " + col + " FROM " + tablaActual + " WHERE " + nombreId + " = ?");
+                    psVal.setObject(1, idEdit);
+                    ResultSet rsVal = psVal.executeQuery();
                     if(rsVal.next()) tf.setText(rsVal.getString(1));
+                    rsVal.close(); psVal.close();
                 }
-                campos.add(tf); nombres.add(col); tipos.add(meta.getColumnTypeName(i).toLowerCase());
+                
+                campos.add(tf); 
+                nombres.add(col); 
+                tipos.add(meta.getColumnTypeName(i).toLowerCase());
                 p.add(tf);
             }
 
-         if (JOptionPane.showConfirmDialog(null, p, idEdit == null ? "Nuevo" : "Editar", 2, JOptionPane.PLAIN_MESSAGE) == 0) {
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < nombres.size(); i++) {
-        sb.append("?");
-        if (i < nombres.size() - 1) sb.append(",");
-    }
-    String interrogantes = sb.toString();
+            if (JOptionPane.showConfirmDialog(null, p, idEdit == null ? "Nuevo Registro" : "Editar Registro", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
+                
+                StringBuilder query = new StringBuilder();
+                if (idEdit == null) {
+                    // INSERT
+                    query.append("INSERT INTO ").append(tablaActual).append(" (").append(String.join(",", nombres)).append(") VALUES (");
+                    for (int i = 0; i < nombres.size(); i++) query.append(i == 0 ? "?" : ",?");
+                    query.append(")");
+                } else {
+                    // UPDATE
+                    query.append("UPDATE ").append(tablaActual).append(" SET ");
+                    for (int i = 0; i < nombres.size(); i++) query.append(nombres.get(i)).append("=?").append(i == nombres.size()-1 ? "" : ",");
+                    query.append(" WHERE ").append(nombreId).append(" = ?");
+                }
 
-    String sql = idEdit == null ? 
-        "INSERT INTO " + tablaActual + " (" + String.join(",", nombres) + ") VALUES (" + interrogantes + ")" :
-        "UPDATE " + tablaActual + " SET " + String.join("=?,", nombres) + "=? WHERE id=" + idEdit;
+                PreparedStatement ps = conexion.prepareStatement(query.toString());
+                
+                for (int i = 0; i < campos.size(); i++) {
+                    String val = campos.get(i).getText().trim();
+                    String t = tipos.get(i);
+                    
+                    if (val.isEmpty()) {
+                        ps.setNull(i + 1, Types.NULL);
+                    } else if (t.contains("int") || t.contains("serial") || t.contains("numeric") || t.contains("decimal")) {
+                        ps.setObject(i + 1, new java.math.BigDecimal(val.replace(",", ".")));
+                    } else {
+                        ps.setObject(i + 1, val);
+                    }
+                }
 
-    PreparedStatement ps = conexion.prepareStatement(sql);
-    for (int i = 0; i < campos.size(); i++) {
-        String val = campos.get(i).getText().trim();
-        String t = tipos.get(i);
-        if (t.contains("int") || t.contains("serial")) {
-            ps.setInt(i + 1, val.isEmpty() ? 0 : Integer.parseInt(val.replaceAll("[^0-9]", "")));
-        } else if (t.contains("numeric") || t.contains("decimal")) {
-            String l = val.replace(",", ".").replaceAll("[^0-9.]", "");
-            ps.setBigDecimal(i + 1, l.isEmpty() ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(l));
-        } else {
-            ps.setObject(i + 1, val.isEmpty() ? null : val);
+                if (idEdit != null) ps.setObject(campos.size() + 1, idEdit);
+
+                ps.executeUpdate();
+                ps.close();
+                JOptionPane.showMessageDialog(null, "¡Operación exitosa!");
+                cargarTabla(modelo, "");
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Error al guardar: " + e.getMessage());
         }
-    }
-    ps.executeUpdate(); 
-    cargarTabla(modelo, "");
-}
-        } catch (Exception e) { }
     }
 
     static void eliminar(JTable t, DefaultTableModel m) {
         int f = t.getSelectedRow();
         if (f == -1) return;
+        
         Object id = m.getValueAt(f, 0);
-        if (JOptionPane.showConfirmDialog(null, "¿Eliminar ID " + id + "?", "Confirmar", JOptionPane.YES_NO_OPTION) == 0) {
+        String nombreColId = m.getColumnName(0);
+
+        if (JOptionPane.showConfirmDialog(null, "¿Eliminar registro con " + nombreColId + ": " + id + "?", "Confirmar", JOptionPane.YES_NO_OPTION) == 0) {
             try {
-                conexion.createStatement().executeUpdate("DELETE FROM "+tablaActual+" WHERE id = " + id);
+                PreparedStatement ps = conexion.prepareStatement("DELETE FROM " + tablaActual + " WHERE " + nombreColId + " = ?");
+                ps.setObject(1, id);
+                ps.executeUpdate();
+                ps.close();
                 cargarTabla(m, "");
-            } catch (Exception e) { }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error al eliminar: " + e.getMessage());
+            }
         }
     }
 }
